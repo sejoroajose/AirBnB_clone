@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 import json
-from os.path import exists
 
 class FileStorage:
     __file_path = "file.json"
@@ -10,22 +9,31 @@ class FileStorage:
         return self.__objects
 
     def new(self, obj):
-        key = f"{obj.__class__.__name__}.{obj.id}"
-        self.__objects[key] = obj
+        self.__objects[f"{obj.__class__.__name__}.{obj.id}"] = obj
 
     def save(self):
         with open(self.__file_path, 'w') as f:
-            temp_dict = {key: obj.to_dict() for key, obj in self.__objects.items()}
-            json.dump(temp_dict, f)
+            temp = {}
+            for key, val in self.__objects.items():
+                temp[key] = val.to_dict()
+            json.dump(temp, f)
 
     def reload(self):
-        if exists(self.__file_path):
+        try:
             with open(self.__file_path, 'r') as f:
-                temp_dict = json.load(f)
-                for obj_dict in temp_dict.values():
-                    class_name = obj_dict['__class__']
-                    del obj_dict['__class__']
-                    if class_name == 'BaseModel':
+                obj_dict = json.load(f)
+                for key, val in obj_dict.items():
+                    cls_name = val["__class__"]
+                    # Delayed import to avoid circular import issues
+                    if cls_name == "BaseModel":
                         from models.base_model import BaseModel
-                        obj = BaseModel(**obj_dict)
-                    self.new(obj)
+                        cls = BaseModel
+                    elif cls_name == "User":
+                        from models.user import User
+                        cls = User
+                    else:
+                        cls = None
+                    if cls:
+                        self.__objects[key] = cls(**val)
+        except FileNotFoundError:
+            pass
